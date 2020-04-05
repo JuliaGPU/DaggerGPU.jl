@@ -1,0 +1,20 @@
+name = "DaggerGPU"
+uuid = "68e73e28-2238-4d5a-bf97-e5d4aa3c4be2"
+authors = ["Julian P Samaroo <jpsamaroo@jpsamaroo.me>"]
+version = "0.1.0"
+
+[deps]
+Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+
+[compat]
+julia = "1.0"
+
+[extras]
+CuArrays = "3a865a2d-5b23-5a0f-bc46-62713ec82fae"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+ROCArrays = "ddf941ca-5d6a-11e9-36cc-a3fed13dd2fc"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["CuArrays", "Distributed", "ROCArrays", "Test"]
