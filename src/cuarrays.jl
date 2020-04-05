@@ -11,6 +11,6 @@ end
 push!(Dagger.PROCESSOR_CALLBACKS, proc -> begin
     if CUDAapi.has_cuda()
         @eval processor(::Val{:CUDA}) = CuArrayProc
-        return CuArrayProc(first(devices()))
+        return CuArrayProc(first(CUDAdrv.devices()))
     end
 end)
