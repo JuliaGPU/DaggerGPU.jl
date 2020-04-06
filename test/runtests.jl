@@ -12,8 +12,14 @@ end
 cuproc = DaggerGPU.processor(:CUDA)
 rocproc = DaggerGPU.processor(:ROC)
 
-cuproc === Dagger.ThreadProc && @warn "No CUDA devices available"
-rocproc === Dagger.ThreadProc && @warn "No ROCm devices available"
+if !DaggerGPU.cancompute(:CUDA)
+    @warn "No CUDA devices available, falling back to ThreadProc"
+    cuproc = Dagger.ThreadProc
+end
+if !DaggerGPU.cancompute(:ROC)
+    @warn "No ROCm devices available, falling back to ThreadProc"
+    rocproc = Dagger.ThreadProc
+end
 
 as = [delayed(x->x+1)(1) for i in 1:10]
 b = delayed((xs...)->[sum(xs)])(as...)

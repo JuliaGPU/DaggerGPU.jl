@@ -5,7 +5,7 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[Dagger]]
 deps = ["Distributed", "LinearAlgebra", "MemPool", "Profile", "Random", "Serialization", "SharedArrays", "SparseArrays", "Statistics", "StatsBase"]
-git-tree-sha1 = "e77f451e4c1f9acbf794cb6377ec42130ff10f56"
+git-tree-sha1 = "8262f275c3acf3787fc70d1bd99aec011a02ddb8"
 repo-rev = "jps/compute-resource"
 repo-url = "https://github.com/JuliaParallel/Dagger.jl.git"
 uuid = "d58978e5-989f-55fb-8d15-ea34adc7bf54"

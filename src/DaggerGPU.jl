@@ -17,6 +17,8 @@ end
 
 processor(kind::Symbol) = processor(Val(kind))
 processor(::Val) = Dagger.ThreadProc
+cancompute(kind::Symbol) = cancompute(Val(kind))
+cancompute(::Val) = false
 
 function __init__()
     @require CuArrays="3a865a2d-5b23-5a0f-bc46-62713ec82fae" begin
