@@ -7,10 +7,11 @@ end
 
 @gpuproc(CuArrayProc, CuArray)
 
+processor(::Val{:CUDA}) = CuArrayProc
+cancompute(::Val{:CUDA}) = CUDAapi.has_cuda()
 
 push!(Dagger.PROCESSOR_CALLBACKS, proc -> begin
     if CUDAapi.has_cuda()
-        @eval processor(::Val{:CUDA}) = CuArrayProc
         return CuArrayProc(first(CUDAdrv.devices()))
     end
 end)
