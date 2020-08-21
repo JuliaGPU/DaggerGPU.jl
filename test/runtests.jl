@@ -5,30 +5,48 @@ addprocs(2)
 @everywhere begin
 
 using Distributed, Dagger, DaggerGPU
-using CuArrays, ROCArrays
+using CUDA, AMDGPU
+
+function myfunc(X)
+    @assert !(X isa Array)
+    X
+end
 
 end
 
-cuproc = DaggerGPU.processor(:CUDA)
-rocproc = DaggerGPU.processor(:ROC)
-
-if !DaggerGPU.cancompute(:CUDA)
-    @warn "No CUDA devices available, falling back to ThreadProc"
-    cuproc = Dagger.ThreadProc
-end
-if !DaggerGPU.cancompute(:ROC)
-    @warn "No ROCm devices available, falling back to ThreadProc"
-    rocproc = Dagger.ThreadProc
+function generate_thunks()
+    as = [delayed(x->x+1)(1) for i in 1:10]
+    delayed((xs...)->[sum(xs)])(as...)
 end
 
-as = [delayed(x->x+1)(1) for i in 1:10]
-b = delayed((xs...)->[sum(xs)])(as...)
+@testset "CUDA" begin
+    if !DaggerGPU.cancompute(:CUDA)
+        @warn "No CUDA devices available, skipping tests"
+    else
+        cuproc = DaggerGPU.processor(:CUDA)
+        b = generate_thunks()
+        opts = Dagger.Sch.ThunkOptions(;proctypes=[cuproc])
+        c_pre = delayed(myfunc; options=opts)(b)
+        c = delayed(sum; options=opts)(b)
 
-opts = Dagger.Sch.ThunkOptions(;proctypes=[cuproc])
-c1 = delayed(sum; options=opts)(b)
-opts = Dagger.Sch.ThunkOptions(;proctypes=[rocproc])
-c2 = delayed(sum; options=opts)(b)
+        opts = Dagger.Sch.ThunkOptions(;proctypes=[Dagger.ThreadProc])
+        d = delayed(identity; options=opts)(c)
+        @test collect(d) == 20
+    end
+end
 
-opts = Dagger.Sch.ThunkOptions(;proctypes=[Dagger.ThreadProc])
-d = delayed((x,y)->x+y; options=opts)(c1,c2)
-@test collect(d) == 40
+@testset "ROCm" begin
+    if !DaggerGPU.cancompute(:ROC)
+        @warn "No ROCm devices available, skipping tests"
+    else
+        rocproc = DaggerGPU.processor(:ROC)
+        b = generate_thunks()
+        opts = Dagger.Sch.ThunkOptions(;proctypes=[rocproc])
+        c_pre = delayed(myfunc; options=opts)(b)
+        c = delayed(sum; options=opts)(b)
+
+        opts = Dagger.Sch.ThunkOptions(;proctypes=[Dagger.ThreadProc])
+        d = delayed(identity; options=opts)(c)
+        @test collect(d) == 20
+    end
+end
