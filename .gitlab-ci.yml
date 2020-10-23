@@ -4,7 +4,6 @@ include:
 # CUDA.jl
 
 cuda:1.5:
-  image: ubuntu:bionic
   extends:
     - .julia:1.5
     - .test
