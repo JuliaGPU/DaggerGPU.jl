@@ -1,0 +1,8 @@
+coverage:
+  ignore:
+    - "doc/"
+    - "benchmark/"
+  status:
+    patch: false
+    project: false
+    changes: false
