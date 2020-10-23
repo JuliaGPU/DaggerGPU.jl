@@ -21,6 +21,7 @@ amdgpu:1.5:
     - .test
   tags:
     - rocm
+  allow_failure: true
 
 
 # other tasks
