@@ -13,8 +13,8 @@ macro gpuproc(PROC, T)
         Dagger.iscompatible_arg(proc::Dagger.ThreadProc, opts, x::$T) = false
 
         # Adapt to/from the appropriate type
-        Dagger.move(ctx, from_proc::OSProc, to_proc::$PROC, x) = adapt($T, x)
-        Dagger.move(ctx, from_proc::$PROC, to_proc::OSProc, x) = adapt(Array, x)
+        Dagger.move(from_proc::OSProc, to_proc::$PROC, x) = adapt($T, x)
+        Dagger.move(from_proc::$PROC, to_proc::OSProc, x) = adapt(Array, x)
     end
 end
 

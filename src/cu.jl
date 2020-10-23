@@ -12,7 +12,7 @@ end
 @gpuproc(CuArrayDeviceProc, CuArray)
 const CuArrayProc = CuArrayDeviceProc
 #= FIXME: CUDA IPC
-function Dagger.move(ctx, from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
+function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
     if from === to
         return x
     else
@@ -34,7 +34,7 @@ struct CuArraySMProc <: Dagger.Processor
 end
 @gpuproc(CuArraySMProc, CuArray)
 #= FIXME: CUDA IPC
-function Dagger.move(ctx, from::CuArraySMProc, to::CuArraySMProc, x)
+function Dagger.move(from::CuArraySMProc, to::CuArraySMProc, x)
     if from.device === to.device
         return x
     else
