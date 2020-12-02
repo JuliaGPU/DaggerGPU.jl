@@ -1,17 +1,16 @@
 using .CUDA
 import .CUDA: CuDevice, CuContext, devices, attribute
 
-export CuArrayProc, CuArrayDeviceProc, CuArraySMProc
+export CuArrayDeviceProc
 
 "Represents a single CUDA GPU device."
 struct CuArrayDeviceProc <: Dagger.Processor
     owner::Int
     #ctx::CuContext
-    device::CuDevice
+    device::Int
 end
 @gpuproc(CuArrayDeviceProc, CuArray)
-const CuArrayProc = CuArrayDeviceProc
-#= FIXME: CUDA IPC
+#= FIXME: DtoD copies and CUDA IPC
 function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
     if from === to
         return x
@@ -21,45 +20,23 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
 end
 =#
 function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
-    #CUDA.context!(proc.ctx)
-    CUDA.@sync func(args...)
+    fetch(Threads.@spawn begin
+        task_local_storage(:processor, proc)
+        CUDA.device!(proc.device)
+        CUDA.@sync func(args...)
+    end)
 end
-
-"Represents a single CUDA GPU Streaming Multiprocessor."
-struct CuArraySMProc <: Dagger.Processor
-    owner::Int
-    #ctx::CuContext
-    device::CuDevice
-    sm::Int
-end
-@gpuproc(CuArraySMProc, CuArray)
-#= FIXME: CUDA IPC
-function Dagger.move(from::CuArraySMProc, to::CuArraySMProc, x)
-    if from.device === to.device
-        return x
-    else
-        error("Not implemented")
-    end
-end
-=#
-function Dagger.execute!(proc::CuArraySMProc, func, args...)
-    #CUDA.context!(proc.ctx)
-    CUDA.@sync func(args...)
-end
+Base.show(io::IO, proc::CuArrayDeviceProc) =
+    print(io, "CuArrayDeviceProc on worker $(proc.owner), device $(proc.device)")
 
 processor(::Val{:CUDA}) = CuArrayDeviceProc
 cancompute(::Val{:CUDA}) = CUDA.has_cuda()
-# TODO: CuArraySMProc
+kernel_backend(::CuArrayDeviceProc) = CUDADevice()
 
 if CUDA.has_cuda()
     for dev in devices()
         Dagger.add_callback!(proc -> begin
-            return CuArrayDeviceProc(Distributed.myid(), #=CuContext(dev),=# dev)
+            return CuArrayDeviceProc(Distributed.myid(), #=CuContext(dev),=# dev.handle)
         end)
-        for i in 1:attribute(dev, CUDA.CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT)
-            Dagger.add_callback!(proc -> begin
-                return CuArraySMProc(Distributed.myid(), #=CuContext(dev),=# dev, i)
-            end)
-        end
     end
 end

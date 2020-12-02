@@ -2,6 +2,7 @@ module DaggerGPU
 
 using Dagger, Requires, Adapt
 using Distributed
+using KernelAbstractions
 
 macro gpuproc(PROC, T)
     quote
@@ -22,6 +23,9 @@ processor(kind::Symbol) = processor(Val(kind))
 processor(::Val) = Dagger.ThreadProc
 cancompute(kind::Symbol) = cancompute(Val(kind))
 cancompute(::Val) = false
+
+kernel_backend() = kernel_backend(Dagger.Sch.thunk_processor())
+kernel_backend(::Dagger.ThreadProc) = CPU()
 
 function __init__()
     @require CUDA="052768ef-5323-5732-b1bb-66c8b64840ba" begin

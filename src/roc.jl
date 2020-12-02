@@ -10,6 +10,7 @@ Dagger.execute!(proc::ROCArrayProc, func, args...) = func(args...)
 
 processor(::Val{:ROC}) = ROCArrayProc
 cancompute(::Val{:ROC}) = AMDGPU.configured
+# FIXME: kernel_backend(::ROCDevice) = ROCArrayProc
 
 if AMDGPU.configured
     Dagger.add_callback!(proc -> begin
