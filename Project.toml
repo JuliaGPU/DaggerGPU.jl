@@ -1,7 +1,7 @@
 name = "DaggerGPU"
 uuid = "68e73e28-2238-4d5a-bf97-e5d4aa3c4be2"
 authors = ["Julian P Samaroo <jpsamaroo@jpsamaroo.me>"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
