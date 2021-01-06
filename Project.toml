@@ -11,7 +11,7 @@ KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 
 [compat]
-Adapt = "1, 2"
+Adapt = "1, 2, 3.0"
 Dagger = "0.10.0"
 KernelAbstractions = "0.4"
 Requires = "1"
