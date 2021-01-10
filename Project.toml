@@ -12,7 +12,7 @@ Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 
 [compat]
 Adapt = "1, 2"
-Dagger = "0.10.0"
+Dagger = "0.10.0, 0.11"
 KernelAbstractions = "0.4"
 Requires = "1"
 julia = "1"
