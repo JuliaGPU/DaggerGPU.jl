@@ -5,11 +5,13 @@ export CuArrayDeviceProc
 
 "Represents a single CUDA GPU device."
 struct CuArrayDeviceProc <: Dagger.Processor
-    owner::Int
-    #ctx::CuContext
     device::Int
+    owner::Int
 end
+
 @gpuproc(CuArrayDeviceProc, CuArray)
+Dagger.get_parent(proc::CuArrayDeviceProc) = Dagger.OSProc(proc.owner)
+
 #= FIXME: DtoD copies and CUDA IPC
 function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
     if from === to
@@ -20,8 +22,9 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
 end
 =#
 function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
+    tls = Dagger.get_tls()
     fetch(Threads.@spawn begin
-        task_local_storage(:processor, proc)
+        Dagger.set_tls!(tls)
         CUDA.device!(proc.device)
         CUDA.@sync func(args...)
     end)
@@ -36,7 +39,7 @@ kernel_backend(::CuArrayDeviceProc) = CUDADevice()
 if CUDA.has_cuda()
     for dev in devices()
         Dagger.add_callback!(proc -> begin
-            return CuArrayDeviceProc(Distributed.myid(), #=CuContext(dev),=# dev.handle)
+            return CuArrayDeviceProc(dev.handle, myid())
         end)
     end
 end
