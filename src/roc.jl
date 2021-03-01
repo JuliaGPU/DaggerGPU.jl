@@ -21,7 +21,21 @@ end
 @gpuproc(ROCArrayProc, ROCArray)
 Dagger.get_parent(proc::ROCArrayProc) = Dagger.OSProc(proc.owner)
 
+function validate_arr_loc(agent::HSAAgent, arr::ROCArray)
+    @assert Array(arr)[1] !== nothing # access test
+    if arr.buf.agent != agent
+        agent_str = sprint(io->Base.show(io, agent))
+        arr_agent_str = sprint(io->Base.show(io, arr.buf.agent))
+        Core.println("agent: $agent_str, arr_agent: $arr_agent_str")
+    end
+    @assert arr.buf.agent == agent
+end
 function Dagger.execute!(proc::ROCArrayProc, func, args...)
+    @info "Executing on $proc: $func $(typeof.(args))"
+    mydev = CUDA.CuDevice(proc.device)
+    for arg in filter(x->x isa ROCArray, args)
+        validate_arr_loc(mydev, arg)
+    end
     tls = Dagger.get_tls()
     task = Threads.@spawn begin
         Dagger.set_tls!(tls)
@@ -41,30 +55,70 @@ function Dagger.execute!(proc::ROCArrayProc, func, args...)
         end
     end
 end
+function Dagger.move(from_proc::OSProc, to_proc::ROCArrayProc, x::ROCArray)
+    @assert from_proc.pid == to_proc.owner # FIXME
+    x_cpu = adapt(Array, x)
+    @assert x_cpu isa Array
+    x_gpu = set_default_agent(agent(to_proc.device)) do
+        adapt(ROCArray, x_cpu)
+    end
+    @assert x_gpu isa ROCArray
+    validate_arr_loc(agent(to_proc.device), x_gpu)
+    return x_gpu
+end
+function Dagger.move(from_proc::OSProc, to_proc::ROCArrayProc, x::Chunk)
+    @assert from_proc.pid == to_proc.owner # FIXME
+    x_cpu = remotecall_fetch(from_proc.pid) do
+        adapt(Array, poolget(x.handle))
+    end
+    x_gpu = set_default_agent(agent(to_proc.device)) do
+        adapt(ROCArray, x_cpu)
+    end
+    if x_gpu isa ROCArray
+        validate_arr_loc(agent(to_proc.device), x_gpu)
+    end
+    return x_gpu
+end
+function Dagger.move(from_proc::ROCArrayProc, to_proc::ROCArrayProc, x::ROCArray)
+    x_cpu = remotecall_fetch(from_proc.owner) do
+        adapt(Array, x)
+    end
+    x_gpu = set_default_agent(agent(to_proc.device)) do
+        adapt(ROCArray, x_cpu)
+    end
+    @assert x_gpu isa ROCArray
+    validate_arr_loc(agent(to_proc.device), x_gpu)
+    return x_gpu
+end
 function Dagger.move(from_proc::ROCArrayProc, to_proc::ROCArrayProc, x::Chunk)
+    #=
     if from_proc.owner == to_proc.owner
         x_from = poolget(x.handle)
-        if from_proc.device.handle == to_proc.device.handle
+        if from_proc.device == to_proc.device
             return x_from
         else
-            to_agent = agent(to_proc.device)
-            x_to = set_default_agent(to_agent) do
+            x_to = set_default_agent(to_proc.device) do
                 similar(x_from)
             end
             copyto!(x_to, x_from)
             return x_to
         end
     else
+    =#
         x_cpu = remotecall_fetch(from_proc.owner) do
-            Dagger.move(from_proc, Dagger.OSProc(), x)
+            adapt(Array, poolget(x.handle))
         end
-        @assert !(x_cpu isa ROCArray)
-        return Dagger.move(OSProc(), to_proc, x_cpu)
-    end
+        x_gpu = set_default_agent(agent(to_proc.device)) do
+            adapt(ROCArray, x_cpu)
+        end
+        if x_gpu isa ROCArray
+            validate_arr_loc(agent(to_proc.device), x_gpu)
+        end
+        return x_gpu
+    #end
 end
 Base.show(io::IO, proc::ROCArrayProc) =
     print(io, "ROCArrayProc on worker $(proc.owner), device $(proc.owner == myid() ? agent(proc.device) : proc.device)")
-
 
 processor(::Val{:ROC}) = ROCArrayProc
 cancompute(::Val{:ROC}) = AMDGPU.configured

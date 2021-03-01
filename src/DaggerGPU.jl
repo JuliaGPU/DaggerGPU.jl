@@ -15,13 +15,14 @@ macro gpuproc(PROC, T)
         # CPUs shouldn't process our array type
         Dagger.iscompatible_arg(proc::Dagger.ThreadProc, opts, x::$T) = false
 
-        # Adapt to/from the appropriate type
+        #= TODO: Adapt to/from the appropriate type
         Dagger.move(from_proc::OSProc, to_proc::$PROC, x::Chunk) = Dagger.move(from_proc, to_proc, x.handle)
         Dagger.move(from_proc::$PROC, to_proc::OSProc, x::Chunk) = Dagger.move(from_proc, to_proc, x.handle)
         Dagger.move(from_proc::OSProc, to_proc::$PROC, x::DRef) = Dagger.move(from_proc, to_proc, poolget(x))
         Dagger.move(from_proc::$PROC, to_proc::OSProc, x::DRef) = Dagger.move(from_proc, to_proc, poolget(x))
         Dagger.move(from_proc::OSProc, to_proc::$PROC, x) = adapt($T, x)
         Dagger.move(from_proc::$PROC, to_proc::OSProc, x) = adapt(Array, x)
+        =#
     end
 end
 
