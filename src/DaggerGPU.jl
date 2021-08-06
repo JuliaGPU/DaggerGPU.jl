@@ -1,6 +1,6 @@
 module DaggerGPU
 
-using Dagger, Requires, Adapt
+using Dagger, MemPool, Requires, Adapt
 using Distributed
 using KernelAbstractions
 

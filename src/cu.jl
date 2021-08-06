@@ -10,18 +10,59 @@ struct CuArrayDeviceProc <: Dagger.Processor
     device::Int
 end
 @gpuproc(CuArrayDeviceProc, CuArray)
-#= FIXME: DtoD copies and CUDA IPC
-function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x)
-    if from === to
-        return x
+Dagger.get_parent(proc::CuArrayDeviceProc) = Dagger.OSProc(proc.owner)
+
+# function can_access(this, peer)
+#     status = Ref{Cint}()
+#     CUDA.cuDeviceCanAccessPeer(status, this, peer)
+#     return status[] == 1
+# end
+
+function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.Chunk{T}) where T<:CuArray
+    if from == to
+        # Same process and GPU, no change
+        poolget(x.handle)
+    elseif from.owner == to.owner
+        # Same process but different GPUs, use DtoD copy
+        from_arr = poolget(x.handle)
+        to_arr = CUDA.device!(to.device) do
+            CuArray{T,N}(undef, size)
+        end
+        copyto!(to_arr, from_arr)
+        to_arr
+    elseif Dagger.system_uuid(from.owner) == Dagger.system_uuid(to.owner)
+        # Same node, we can use IPC
+        ipc_handle, eT, shape = remotecall_fetch(from.owner, x.handle) do h
+            arr = poolget(h)
+            ipc_handle_ref = Ref{CUDA.CUipcMemHandle}()
+            GC.@preserve arr begin
+                CUDA.cuIpcGetMemHandle(ipc_handle_ref, pointer(arr))
+            end
+            (ipc_handle_ref[], eltype(arr), size(arr))
+        end
+        r_ptr = Ref{CUDA.CUdeviceptr}()
+        CUDA.device!(from.device) do # FIXME: Assumes that device IDs are identical across processes
+            CUDA.cuIpcOpenMemHandle(r_ptr, ipc_handle, CUDA.CU_IPC_MEM_LAZY_ENABLE_PEER_ACCESS)
+        end
+        ptr = Base.unsafe_convert(CUDA.CuPtr{eT}, r_ptr[])
+        arr = unsafe_wrap(CuArray, ptr, shape; own=false)
+        finalizer(arr) do arr
+            CUDA.cuIpcCloseMemHandle(pointer(arr))
+        end
+        # FIXME: Deal with to_proc being a different GPU
     else
-        error("Not implemented")
+        # Different node, use DtoH, serialization, HtoD
+        # TODO UCX
+        CuArray(remotecall_fetch(from.owner, x.handle) do h
+            Array(poolget(h))
+        end)
     end
 end
-=#
+
 function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
+    tls = Dagger.get_tls()
     fetch(Threads.@spawn begin
-        task_local_storage(:processor, proc)
+        Dagger.set_tls!(tls)
         CUDA.device!(proc.device)
         CUDA.@sync func(args...)
     end)
@@ -35,7 +76,7 @@ kernel_backend(::CuArrayDeviceProc) = CUDADevice()
 
 if CUDA.has_cuda()
     for dev in devices()
-        Dagger.add_callback!(proc -> begin
+        Dagger.add_callback!(() -> begin
             return CuArrayDeviceProc(Distributed.myid(), #=CuContext(dev),=# dev.handle)
         end)
     end
