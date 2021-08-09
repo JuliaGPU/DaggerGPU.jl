@@ -14,7 +14,7 @@ Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 [compat]
 Adapt = "1, 2, 3"
 Dagger = "0.12.1"
-KernelAbstractions = "0.4"
+KernelAbstractions = "0.5, 0.6, 0.7"
 Requires = "1"
 julia = "1"
 
