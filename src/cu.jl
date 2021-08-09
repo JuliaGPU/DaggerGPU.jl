@@ -1,13 +1,15 @@
 using .CUDA
 import .CUDA: CuDevice, CuContext, devices, attribute
 
+using UUIDs
+
 export CuArrayDeviceProc
 
 "Represents a single CUDA GPU device."
 struct CuArrayDeviceProc <: Dagger.Processor
     owner::Int
-    #ctx::CuContext
     device::Int
+    device_uuid::UUID
 end
 @gpuproc(CuArrayDeviceProc, CuArray)
 Dagger.get_parent(proc::CuArrayDeviceProc) = Dagger.OSProc(proc.owner)
@@ -49,7 +51,15 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.C
         finalizer(arr) do arr
             CUDA.cuIpcCloseMemHandle(pointer(arr))
         end
-        # FIXME: Deal with to_proc being a different GPU
+        if from.device_uuid != to.device_uuid
+            CUDA.device!(to.device) do
+                to_arr = similar(arr)
+                copyto!(to_arr, arr)
+                to_arr
+            end
+        else
+            arr
+        end
     else
         # Different node, use DtoH, serialization, HtoD
         # TODO UCX
@@ -68,7 +78,7 @@ function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
     end)
 end
 Base.show(io::IO, proc::CuArrayDeviceProc) =
-    print(io, "CuArrayDeviceProc on worker $(proc.owner), device $(proc.device)")
+    print(io, "CuArrayDeviceProc on worker $(proc.owner), device $(proc.device), uuid $(proc.device_uuid)")
 
 processor(::Val{:CUDA}) = CuArrayDeviceProc
 cancompute(::Val{:CUDA}) = CUDA.has_cuda()
@@ -77,7 +87,7 @@ kernel_backend(::CuArrayDeviceProc) = CUDADevice()
 if CUDA.has_cuda()
     for dev in devices()
         Dagger.add_callback!(() -> begin
-            return CuArrayDeviceProc(Distributed.myid(), #=CuContext(dev),=# dev.handle)
+            return CuArrayDeviceProc(Distributed.myid(), dev.handle, CUDA.uuid(dev))
         end)
     end
 end
