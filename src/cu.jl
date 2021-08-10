@@ -71,11 +71,22 @@ end
 
 function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
     tls = Dagger.get_tls()
-    fetch(Threads.@spawn begin
+    task = Threads.@spawn begin
         Dagger.set_tls!(tls)
         CUDA.device!(proc.device)
         CUDA.@sync func(args...)
-    end)
+    end
+    try
+        fetch(task)
+    catch err
+        @static if VERSION >= v"1.1"
+            stk = Base.catch_stack(task)
+            err, frames = stk[1]
+            rethrow(CapturedException(err, frames))
+        else
+            rethrow(task.result)
+        end
+    end
 end
 Base.show(io::IO, proc::CuArrayDeviceProc) =
     print(io, "CuArrayDeviceProc on worker $(proc.owner), device $(proc.device), uuid $(proc.device_uuid)")
