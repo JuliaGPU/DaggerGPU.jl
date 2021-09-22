@@ -13,7 +13,7 @@ cancompute(::Val{:ROC}) = AMDGPU.configured
 kernel_backend(::ROCDevice) = ROCArrayProc
 
 if AMDGPU.configured
-    Dagger.add_callback!(proc -> begin
-        return ROCArrayProc(AMDGPU.get_default_agent())
-    end)
+    Dagger.add_processor_callback!("rocarray_device_default") do
+        ROCArrayProc(AMDGPU.get_default_agent())
+    end
 end

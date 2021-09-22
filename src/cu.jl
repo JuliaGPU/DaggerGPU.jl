@@ -97,8 +97,8 @@ kernel_backend(::CuArrayDeviceProc) = CUDADevice()
 
 if CUDA.has_cuda()
     for dev in devices()
-        Dagger.add_callback!(() -> begin
-            return CuArrayDeviceProc(Distributed.myid(), dev.handle, CUDA.uuid(dev))
-        end)
+        Dagger.add_processor_callback!("cuarray_device_$(dev.handle)") do
+            CuArrayDeviceProc(Distributed.myid(), dev.handle, CUDA.uuid(dev))
+        end
     end
 end
