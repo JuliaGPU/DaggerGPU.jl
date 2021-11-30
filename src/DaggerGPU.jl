@@ -32,6 +32,12 @@ macro gpuproc(PROC, T)
                 adapt(Array, poolget(x.handle))
             end
         end
+        function Dagger.move(from_proc::OSProc, to_proc::$PROC, x)
+            adapt($T, x)
+        end
+        function Dagger.move(from_proc::$PROC, to_proc::OSProc, x)
+            adapt(Array, x)
+        end
     end
 end
 
