@@ -1,9 +1,20 @@
-using .CUDA
-import .CUDA: CuDevice, CuContext, devices, attribute
-
-using UUIDs
+module CUDAExt
 
 export CuArrayDeviceProc
+
+import Dagger, DaggerGPU, MemPool
+import Distributed: myid, remotecall_fetch
+
+const CPUProc = Union{Dagger.OSProc,Dagger.ThreadProc}
+
+if isdefined(Base, :get_extension)
+    import CUDA
+else
+    import ..CUDA
+end
+import CUDA: CuDevice, CuContext, CuArray, CUDABackend, devices, attribute
+
+using UUIDs
 
 "Represents a single CUDA GPU device."
 struct CuArrayDeviceProc <: Dagger.Processor
@@ -11,7 +22,7 @@ struct CuArrayDeviceProc <: Dagger.Processor
     device::Int
     device_uuid::UUID
 end
-@gpuproc(CuArrayDeviceProc, CuArray)
+DaggerGPU.@gpuproc(CuArrayDeviceProc, CuArray)
 Dagger.get_parent(proc::CuArrayDeviceProc) = Dagger.OSProc(proc.owner)
 
 # function can_access(this, peer)
@@ -23,10 +34,10 @@ Dagger.get_parent(proc::CuArrayDeviceProc) = Dagger.OSProc(proc.owner)
 function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.Chunk{T}) where T<:CuArray
     if from == to
         # Same process and GPU, no change
-        poolget(x.handle)
+        MemPool.poolget(x.handle)
     elseif from.owner == to.owner
         # Same process but different GPUs, use DtoD copy
-        from_arr = poolget(x.handle)
+        from_arr = MemPool.poolget(x.handle)
         to_arr = CUDA.device!(to.device) do
             CuArray{T,N}(undef, size)
         end
@@ -35,7 +46,7 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.C
     elseif Dagger.system_uuid(from.owner) == Dagger.system_uuid(to.owner)
         # Same node, we can use IPC
         ipc_handle, eT, shape = remotecall_fetch(from.owner, x.handle) do h
-            arr = poolget(h)
+            arr = MemPool.poolget(h)
             ipc_handle_ref = Ref{CUDA.CUipcMemHandle}()
             GC.@preserve arr begin
                 CUDA.cuIpcGetMemHandle(ipc_handle_ref, pointer(arr))
@@ -64,41 +75,56 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.C
         # Different node, use DtoH, serialization, HtoD
         # TODO UCX
         CuArray(remotecall_fetch(from.owner, x.handle) do h
-            Array(poolget(h))
+            Array(MemPool.poolget(h))
         end)
     end
 end
 
-function Dagger.execute!(proc::CuArrayDeviceProc, func, args...)
+function Dagger.execute!(proc::CuArrayDeviceProc, f, args...; kwargs...)
+    @nospecialize f args kwargs
     tls = Dagger.get_tls()
     task = Threads.@spawn begin
         Dagger.set_tls!(tls)
         CUDA.device!(proc.device)
-        CUDA.@sync func(args...)
+        result = Base.@invokelatest f(args...; kwargs...)
+        CUDA.synchronize()
+        return result
     end
+
     try
         fetch(task)
     catch err
-        @static if VERSION >= v"1.1"
-            stk = Base.catch_stack(task)
-            err, frames = stk[1]
-            rethrow(CapturedException(err, frames))
-        else
-            rethrow(task.result)
-        end
+        stk = current_exceptions(task)
+        err, frames = stk[1]
+        rethrow(CapturedException(err, frames))
     end
 end
 Base.show(io::IO, proc::CuArrayDeviceProc) =
-    print(io, "CuArrayDeviceProc on worker $(proc.owner), device $(proc.device), uuid $(proc.device_uuid)")
+    print(io, "CuArrayDeviceProc(worker $(proc.owner), device $(proc.device), uuid $(proc.device_uuid))")
 
-processor(::Val{:CUDA}) = CuArrayDeviceProc
-cancompute(::Val{:CUDA}) = CUDA.has_cuda()
-kernel_backend(::CuArrayDeviceProc) = CUDADevice()
+DaggerGPU.processor(::Val{:CUDA}) = CuArrayDeviceProc
+DaggerGPU.cancompute(::Val{:CUDA}) = CUDA.has_cuda()
+DaggerGPU.kernel_backend(::CuArrayDeviceProc) = CUDABackend()
+DaggerGPU.with_device(f, proc::CuArrayDeviceProc) =
+    CUDA.device!(f, proc.device)
 
-if CUDA.has_cuda()
-    for dev in devices()
-        Dagger.add_processor_callback!("cuarray_device_$(dev.handle)") do
-            CuArrayDeviceProc(Distributed.myid(), dev.handle, CUDA.uuid(dev))
+function Dagger.to_scope(::Val{:cuda_gpu}, sc::NamedTuple)
+    worker = get(sc, :worker, 1)
+    dev_id = sc.cuda_gpu
+    dev = collect(CUDA.devices())[dev_id]
+    return Dagger.ExactScope(CuArrayDeviceProc(worker, dev_id-1, CUDA.uuid(dev)))
+end
+Dagger.scope_key_precedence(::Val{:cuda_gpu}) = 1
+
+function __init__()
+    if CUDA.has_cuda()
+        for dev in CUDA.devices()
+            @debug "Registering CUDA GPU processor with Dagger: $dev"
+            Dagger.add_processor_callback!("cuarray_device_$(dev.handle)") do
+                CuArrayDeviceProc(myid(), dev.handle, CUDA.uuid(dev))
+            end
         end
     end
 end
+
+end # module CUDAExt
