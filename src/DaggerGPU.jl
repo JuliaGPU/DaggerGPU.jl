@@ -56,6 +56,9 @@ function __init__()
     @require AMDGPU="21141c5a-9bdb-4563-92ae-f87d6854732e" begin
         include("roc.jl")
     end
+    @require Metal="dde4c033-4e86-420c-a63e-0dd931031962" begin
+        include("metal.jl")
+    end
 end
 
 end
