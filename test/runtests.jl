@@ -34,8 +34,8 @@ end
 @testset "CPU" begin
     @testset "KernelAbstractions" begin
         A = rand(Float32, 8)
-        _A = collect(delayed(fill_thunk)(A, 2.3))
-        @test all(_A .== 2.3)
+        _A = collect(delayed(fill_thunk)(A, 2.3f0))
+        @test all(_A .== 2.3f0)
     end
 end
 
