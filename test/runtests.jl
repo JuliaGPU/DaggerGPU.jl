@@ -3,8 +3,8 @@ using Test
 addprocs(2, exeflags="--project")
 
 @everywhere begin
+    using CUDA, AMDGPU, Metal, KernelAbstractions
     using Distributed, Dagger, DaggerGPU
-    using CUDA, AMDGPU, KernelAbstractions
 end
 @everywhere begin
     function myfunc(X)
@@ -29,13 +29,15 @@ function generate_thunks()
     delayed((xs...)->[sum(xs)])(as...)
 end
 
-@test DaggerGPU.cancompute(:CUDA) || DaggerGPU.cancompute(:ROC)
+@test DaggerGPU.cancompute(:CUDA) ||
+      DaggerGPU.cancompute(:ROC)  ||
+      DaggerGPU.cancompute(:Metal)
 
 @testset "CPU" begin
     @testset "KernelAbstractions" begin
         A = rand(Float32, 8)
-        _A = collect(delayed(fill_thunk)(A, 2.3))
-        @test all(_A .== 2.3)
+        _A = collect(delayed(fill_thunk)(A, 2.3f0))
+        @test all(_A .== 2.3f0)
     end
 end
 
@@ -87,5 +89,24 @@ end
             @test all(_A .== 2.3)
         end
         =#
+    end
+end
+
+@testset "Metal" begin
+    if !DaggerGPU.cancompute(:Metal)
+        @warn "No Metal devices available, skipping tests"
+    else
+        metalproc = DaggerGPU.processor(:Metal)
+        b = generate_thunks()
+        opts = Dagger.Sch.ThunkOptions(;proclist = [metalproc])
+        c_pre = delayed(myfunc; options = opts)(b)
+        c = delayed(sum; options = opts)(b)
+
+        opts = Dagger.Sch.ThunkOptions(;proclist = [Dagger.ThreadProc])
+        d = delayed(identity; options = opts)(c)
+        @test collect(d) == 20
+
+        # It seems KernelAbstractions does not support Metal.jl.
+        @test_skip "KernelAbstractions"
     end
 end
