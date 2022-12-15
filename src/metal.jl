@@ -37,8 +37,8 @@ processor(::Val{:Metal}) = MtlArrayDeviceProc
 cancompute(::Val{:Metal}) = length(Metal.devices()) >= 1
 kernel_backend(::MtlArrayDeviceProc) = Metal.current_device()
 
-if length(Metal.devices()) >= 1
-    Dagger.add_processor_callback!("metal_device") do
+for dev in Metal.devices()
+    Dagger.add_processor_callback!("metal_device_$(dev.registryID)") do
         MtlArrayDeviceProc(Distributed.myid(), Metal.current_device())
     end
 end
