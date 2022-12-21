@@ -22,6 +22,11 @@ end
         @show A
         A
     end
+
+    # Create a function to perform and in-place operation.
+    function addarray!(x)
+        x .= x .+ 1.0f0
+    end
 end
 
 function generate_thunks()
@@ -108,5 +113,56 @@ end
 
         # It seems KernelAbstractions does not support Metal.jl.
         @test_skip "KernelAbstractions"
+
+        @testset "In-place operations" begin
+            # Create a page-aligned array.
+            dims = (2, 2)
+            T = Float32
+            pagesize = ccall(:getpagesize, Cint, ())
+            addr = Ref(C_NULL)
+
+            ccall(
+                :posix_memalign,
+                Cint,
+                (Ptr{Ptr{Cvoid}}, Csize_t, Csize_t), addr,
+                pagesize,
+                prod(dims) * sizeof(T)
+            )
+
+            array = unsafe_wrap(
+                Array{T, length(dims)},
+                reinterpret(Ptr{T}, addr[]),
+                dims,
+                own = false
+            )
+
+            # Initialize the array.
+            array[1, 1] = 1
+            array[1, 2] = 2
+            array[2, 1] = 3
+            array[2, 2] = 4
+
+            # Here, we must only have one worker. We want to test the in-place
+            # memory computation and the memory is not shared among different
+            # workers.
+            rmprocs(workers())
+
+            # Perform the computation.
+            t = Dagger.@spawn proclist = [metalproc] addarray!(array)
+
+            # Fetch and check the results.
+            ret = fetch(t)
+
+            @test ret[1, 1] == 2.0f0
+            @test ret[1, 2] == 3.0f0
+            @test ret[2, 1] == 4.0f0
+            @test ret[2, 2] == 5.0f0
+
+            # Check if the operation happened in-place.
+            @test array[1, 1] == 2.0f0
+            @test array[1, 2] == 3.0f0
+            @test array[2, 1] == 4.0f0
+            @test array[2, 2] == 5.0f0
+        end
     end
 end
