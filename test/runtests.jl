@@ -23,7 +23,7 @@ end
         A
     end
 
-    # Create a function to perform and in-place operation.
+    # Create a function to perform an in-place operation.
     function addarray!(x)
         x .= x .+ 1.0f0
     end
@@ -142,13 +142,8 @@ end
             array[2, 1] = 3
             array[2, 2] = 4
 
-            # Here, we must only have one worker. We want to test the in-place
-            # memory computation and the memory is not shared among different
-            # workers.
-            rmprocs(workers())
-
-            # Perform the computation.
-            t = Dagger.@spawn proclist = [metalproc] addarray!(array)
+            # Perform the computation only on a local `MtlArrayDeviceProc`
+            t = Dagger.@spawn single=myid() proclist = [metalproc] addarray!(array)
 
             # Fetch and check the results.
             ret = fetch(t)

@@ -18,20 +18,7 @@ function Dagger.move(from_proc::OSProc, to_proc::MtlArrayDeviceProc, x::Chunk)
     to_pid = Dagger.get_parent(to_proc).pid
     @assert myid() == to_pid
 
-    return remotecall_fetch(from_pid, x) do x
-        array = poolget(x.handle)
-
-        # If we have unified memory, we can try casting the `Array` to
-        # `MtlArray`.
-        device = _get_metal_device(to_proc)
-
-        if (device !== nothing) && device.hasUnifiedMemory
-            mtlarray = _cast_array_to_mtlarray(x, device)
-            mtlarray !== nothing && return mtlarray
-        end
-
-        return adapt(MtlArray, array)
-    end
+    return Dagger.move(from_proc, to_proc, remotecall_fetch(x->poolget(x.handle), from_pid, x))
 end
 
 function Dagger.move(from_proc::MtlArrayDeviceProc, to_proc::OSProc, x::Chunk)
@@ -41,17 +28,7 @@ function Dagger.move(from_proc::MtlArrayDeviceProc, to_proc::OSProc, x::Chunk)
 
     return remotecall_fetch(from_pid, x) do x
         mtlarray = poolget(x.handle)
-
-        # If we have unified memory, we can just cast the `MtlArray` to an
-        # `Array`.
-        device = _get_metal_device(from_proc)
-
-        if (device !== nothing) && device.hasUnifiedMemory
-            T = eltype(mtlarray)
-            return unsafe_wrap(Array{T}, mtlarray, size(mtlarray))
-        else
-            return adapt(Array, mtlarray)
-        end
+        return Dagger.move(from_proc, to_proc, mtlarray)
     end
 end
 
@@ -117,7 +94,7 @@ function Dagger.execute!(proc::MtlArrayDeviceProc, func, args...)
 end
 
 function Base.show(io::IO, proc::MtlArrayDeviceProc)
-    print(io, "MtlArrayDeviceProc on worker $(proc.owner), device ($(proc.device_id))")
+    print(io, "MtlArrayDeviceProc on worker $(proc.owner), device ($(something(_get_metal_device(proc)).name))")
 end
 
 processor(::Val{:Metal}) = MtlArrayDeviceProc
