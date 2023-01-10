@@ -99,7 +99,7 @@ end
 
 processor(::Val{:Metal}) = MtlArrayDeviceProc
 cancompute(::Val{:Metal}) = length(Metal.devices()) >= 1
-kernel_backend(::MtlArrayDeviceProc) = MtlArrayDeviceProc
+kernel_backend(proc::MtlArrayDeviceProc) = _get_metal_device(proc)
 
 for dev in Metal.devices()
     Dagger.add_processor_callback!("metal_device_$(dev.registryID)") do
