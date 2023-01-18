@@ -1,10 +1,19 @@
-using Distributed
 using Test
+using Distributed
 addprocs(2, exeflags="--project")
 
 @everywhere begin
-    using CUDA, AMDGPU, Metal, KernelAbstractions
+    try using CUDA
+    catch end
+    
+    try using AMDGPU
+    catch end
+
+    try using Metal
+    catch end
+
     using Distributed, Dagger, DaggerGPU
+    using KernelAbstractions
 end
 @everywhere begin
     function myfunc(X)
