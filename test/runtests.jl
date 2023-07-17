@@ -13,6 +13,7 @@ addprocs(2, exeflags="--project")
     catch end
 
     using Distributed, Dagger, DaggerGPU
+    import DaggerGPU: Kernel
     using KernelAbstractions
 end
 @everywhere begin
@@ -20,7 +21,7 @@ end
         return !(X isa Array)
     end
 
-    KernelAbstractions.@kernel function fill_kernel(A, x)
+    @kernel function fill_kernel(A, x)
         idx = @index(Global, Linear)
         A[idx] = x
     end
@@ -30,6 +31,11 @@ end
         k(A, x; ndrange=8)
         KernelAbstractions.synchronize(backend)
         return A, typeof(A)
+    end
+
+    @kernel function copy_kernel(B, A)
+        idx = @index(Global, Linear)
+        B[idx] = A[idx]
     end
 
     # Create a function to perform an in-place operation.
@@ -53,6 +59,13 @@ end
         DA, T = fetch(Dagger.@spawn fill_thunk(A, 2.3f0))
         @test all(DA .== 2.3f0)
         @test T <: Array
+
+        A = rand(Float64, 128)
+        B = zeros(Float64, 128)
+        Dagger.with_options(scope=Dagger.scope(worker=1,thread=1)) do
+            fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
+        end
+        @test all(B .== A)
     end
 end
 
@@ -81,6 +94,13 @@ end
             end
             @test all(DA .== 2.3f0)
             @test T <: CuArray
+
+            A = CUDA.rand(128)
+            B = CUDA.zeros(128)
+            Dagger.with_options(;scope=Dagger.scope(worker=1,cuda_gpu=1)) do
+                fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
+            end
+            @test all(B .== A)
         end
     end
 end
@@ -110,6 +130,13 @@ end
             end
             @test all(DA .== 2.3f0)
             @test T <: ROCArray
+
+            A = AMDGPU.rand(128)
+            B = AMDGPU.zeros(128)
+            Dagger.with_options(;scope=Dagger.scope(worker=1,rocm_gpu=1)) do
+                fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
+            end
+            @test all(B .== A)
         end
     end
 end
@@ -139,6 +166,13 @@ end
             end
             @test all(DA .== 2.3f0)
             @test T <: MtlArray
+
+            A = Metal.rand(128)
+            B = Metal.zeros(128)
+            Dagger.with_options(;scope=Dagger.scope(worker=1,metal_gpu=1)) do
+                fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
+            end
+            @test all(B .== A)
         end
 
         @testset "In-place operations" begin
