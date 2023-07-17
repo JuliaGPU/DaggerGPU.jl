@@ -8,6 +8,17 @@ import Dagger: Chunk
 
 const CPUProc = Union{OSProc, Dagger.ThreadProc}
 
+struct Kernel{F} end
+Kernel(f) = Kernel{f}()
+
+function (::Kernel{F})(args...; ndrange) where F
+    @nospecialize args
+    dev = kernel_backend()
+    kern = F(dev)
+    kern(args...; ndrange)
+    KernelAbstractions.synchronize(dev)
+end
+
 macro gpuproc(PROC, T)
     PROC = esc(PROC)
     T = esc(T)
