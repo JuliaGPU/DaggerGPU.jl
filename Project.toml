@@ -1,7 +1,7 @@
 name = "DaggerGPU"
 uuid = "68e73e28-2238-4d5a-bf97-e5d4aa3c4be2"
 authors = ["Julian P Samaroo <jpsamaroo@jpsamaroo.me>"]
-version = "0.1.6"
+version = "0.1.7"
 
 [deps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
@@ -29,7 +29,7 @@ ROCExt = "AMDGPU"
 AMDGPU = "0.4"
 Adapt = "1, 2, 3"
 CUDA = "3, 4"
-Dagger = "0.17"
+Dagger = "0.17, 0.18"
 KernelAbstractions = "0.9"
 MemPool = "0.3, 0.4"
 Metal = "0.3, 0.4"
