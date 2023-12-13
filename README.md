@@ -11,7 +11,7 @@ sc = Dagger.scope(cuda_gpu=1)
 # two large matrices
 A = rand(1000, 1000); B = rand(1000, 1000)
 # move them to gpu and multiply there
-A_gpu = Dagger.@spawn scope=sc CUDA.Matrix(A); B_gpu = Dagger.@spawn scope=sc CUDA.Matrix(B)
+A_gpu = Dagger.@spawn scope=sc CUDA.CuMatrix(A); B_gpu = Dagger.@spawn scope=sc CUDA.CuMatrix(B)
 C_gpu = Dagger.@spawn scope=sc A_gpu*B_gpu
 # move back to cpu to use there.
 C = Dagger.@spawn scope=sc Matrix(C_gpu) 
