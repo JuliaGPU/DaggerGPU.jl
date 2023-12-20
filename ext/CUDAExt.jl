@@ -80,6 +80,24 @@ function Dagger.move(from::CuArrayDeviceProc, to::CuArrayDeviceProc, x::Dagger.C
     end
 end
 
+function Dagger.move(from_proc::CPUProc, to_proc::CuArrayDeviceProc, x::CuArray)
+    # TODO: No extra allocations here
+    if CUDA.device(x) == collect(CUDA.devices())[to_proc.device+1]
+        return x
+    end
+    DaggerGPU.with_device(to_proc) do
+        _x = similar(x)
+        copyto!(_x, x)
+        return _x
+    end
+end
+
+function Dagger.move(from_proc::CuArrayDeviceProc, to_proc::CPUProc, x::CuArray{T,N}) where {T,N}
+    _x = Array{T,N}(undef, size(x))
+    copyto!(_x, x)
+    return _x
+end
+
 function Dagger.execute!(proc::CuArrayDeviceProc, f, args...; kwargs...)
     @nospecialize f args kwargs
     tls = Dagger.get_tls()
