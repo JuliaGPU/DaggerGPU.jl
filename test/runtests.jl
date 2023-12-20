@@ -79,28 +79,37 @@ end
             CuArrayDeviceProc
         end
         @test DaggerGPU.processor(:CUDA) === cuproc
-        b = generate_thunks()
-        c = Dagger.with_options(;scope=Dagger.scope(cuda_gpu=1)) do
-            @test fetch(Dagger.@spawn isongpu(b))
-            Dagger.@spawn sum(b)
-        end
-        @test !fetch(Dagger.@spawn isongpu(b))
-        @test fetch(Dagger.@spawn identity(c)) == 20
+        ndevices = length(collect(CUDA.devices()))
 
-        @testset "KernelAbstractions" begin
+        @testset "Arrays (GPU $gpu)" for gpu in 1:min(ndevices, 2)
+            b = generate_thunks()
+            c = Dagger.with_options(;scope=Dagger.scope(cuda_gpu=gpu)) do
+                @test fetch(Dagger.@spawn isongpu(b))
+                Dagger.@spawn sum(b)
+            end
+            @test !fetch(Dagger.@spawn isongpu(b))
+            @test fetch(Dagger.@spawn identity(c)) == 20
+        end
+
+        @testset "KernelAbstractions (GPU $gpu)" for gpu in 1:min(ndevices, 2)
             A = rand(Float32, 8)
-            DA, T = Dagger.with_options(;scope=Dagger.scope(cuda_gpu=1)) do
+            DA, T = Dagger.with_options(;scope=Dagger.scope(cuda_gpu=gpu)) do
                 fetch(Dagger.@spawn fill_thunk(A, 2.3f0))
             end
             @test all(DA .== 2.3f0)
             @test T <: CuArray
 
-            A = CUDA.rand(128)
-            B = CUDA.zeros(128)
-            Dagger.with_options(;scope=Dagger.scope(worker=1,cuda_gpu=1)) do
+            local A, B
+            CUDA.device!(gpu-1) do
+                A = CUDA.rand(128)
+                B = CUDA.zeros(128)
+            end
+            Dagger.with_options(;scope=Dagger.scope(worker=1,cuda_gpu=gpu)) do
                 fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
             end
-            @test all(B .== A)
+            CUDA.device!(gpu-1) do
+                @test all(B .== A)
+            end
         end
     end
 end
@@ -115,28 +124,37 @@ end
             ROCArrayDeviceProc
         end
         @test DaggerGPU.processor(:ROC) === rocproc
-        b = generate_thunks()
-        c = Dagger.with_options(;scope=Dagger.scope(rocm_gpu=1)) do
-            @test fetch(Dagger.@spawn isongpu(b))
-            Dagger.@spawn sum(b)
-        end
-        @test !fetch(Dagger.@spawn isongpu(b))
-        @test fetch(Dagger.@spawn identity(c)) == 20
+        ndevices = length(AMDGPU.devices())
 
-        @testset "KernelAbstractions" begin
+        @testset "Arrays (GPU $gpu)" for gpu in 1:min(ndevices, 2)
+            b = generate_thunks()
+            c = Dagger.with_options(;scope=Dagger.scope(rocm_gpu=gpu)) do
+                @test fetch(Dagger.@spawn isongpu(b))
+                Dagger.@spawn sum(b)
+            end
+            @test !fetch(Dagger.@spawn isongpu(b))
+            @test fetch(Dagger.@spawn identity(c)) == 20
+        end
+
+        @testset "KernelAbstractions (GPU $gpu)" for gpu in 1:min(ndevices, 2)
             A = rand(Float32, 8)
-            DA, T = Dagger.with_options(;scope=Dagger.scope(rocm_gpu=1)) do
+            DA, T = Dagger.with_options(;scope=Dagger.scope(rocm_gpu=gpu)) do
                 fetch(Dagger.@spawn fill_thunk(A, 2.3f0))
             end
             @test all(DA .== 2.3f0)
             @test T <: ROCArray
 
-            A = AMDGPU.rand(128)
-            B = AMDGPU.zeros(128)
-            Dagger.with_options(;scope=Dagger.scope(worker=1,rocm_gpu=1)) do
+            local A, B
+            AMDGPU.device!(AMDGPU.devices()[gpu]) do
+                A = AMDGPU.rand(128)
+                B = AMDGPU.zeros(128)
+            end
+            Dagger.with_options(;scope=Dagger.scope(worker=1,rocm_gpu=gpu)) do
                 fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
             end
-            @test all(B .== A)
+            AMDGPU.device!(AMDGPU.devices()[gpu]) do
+                @test all(B .== A)
+            end
         end
     end
 end
