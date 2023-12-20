@@ -26,7 +26,7 @@ MetalExt = "Metal"
 ROCExt = "AMDGPU"
 
 [compat]
-AMDGPU = "0.4"
+AMDGPU = "0.8.1"
 Adapt = "1, 2, 3, 4"
 CUDA = "3, 4, 5"
 Dagger = "0.17, 0.18"
