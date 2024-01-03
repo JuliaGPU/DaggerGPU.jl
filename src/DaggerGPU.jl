@@ -5,6 +5,7 @@ using Distributed
 using KernelAbstractions, Adapt
 
 import Dagger: Chunk
+import LinearAlgebra
 
 const CPUProc = Union{OSProc, Dagger.ThreadProc}
 
@@ -29,48 +30,6 @@ macro gpuproc(PROC, T)
 
         # CPUs shouldn't process our array type
         Dagger.iscompatible_arg(proc::Dagger.ThreadProc, opts, x::$T) = false
-
-        # Adapt to/from the appropriate type
-        function Dagger.move(from_proc::CPUProc, to_proc::$PROC, x::Chunk)
-            from_pid = Dagger.get_parent(from_proc).pid
-            to_pid = Dagger.get_parent(to_proc).pid
-            @assert myid() == to_pid
-            cpu_data = remotecall_fetch(from_pid, x) do x
-                poolget(x.handle)
-            end
-            return DaggerGPU.with_device(to_proc) do
-                adapt($T, cpu_data)
-            end
-        end
-        function Dagger.move(from_proc::$PROC, to_proc::CPUProc, x::Chunk)
-            from_pid = Dagger.get_parent(from_proc).pid
-            to_pid = Dagger.get_parent(to_proc).pid
-            @assert myid() == to_pid
-            remotecall_fetch(from_pid, x) do x
-                # FIXME: Need to switch devices
-                DaggerGPU.with_device(from_proc) do
-                    adapt(Array, poolget(x.handle))
-                end
-            end
-        end
-        function Dagger.move(from_proc::CPUProc, to_proc::$PROC, x)
-            DaggerGPU.with_device(to_proc) do
-                x_opt = DaggerGPU.move_optimized(from_proc, to_proc, x)
-                if x_opt !== nothing
-                    return x_opt
-                end
-                return adapt($T, x)
-            end
-        end
-        function Dagger.move(from_proc::$PROC, to_proc::CPUProc, x)
-            DaggerGPU.with_device(from_proc) do
-                x_opt = DaggerGPU.move_optimized(from_proc, to_proc, x)
-                if x_opt !== nothing
-                    return x_opt
-                end
-                return adapt(Array, x)
-            end
-        end
     end
 end
 
