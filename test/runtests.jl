@@ -3,17 +3,36 @@ using Distributed
 using Random
 using LinearAlgebra
 
-addprocs(2, exeflags="--project")
+if parse(Bool, get(ENV, "CI_USE_CUDA", "false"))
+    using Pkg
+    Pkg.add("CUDA")
+end
+if parse(Bool, get(ENV, "CI_USE_ROCM", "false"))
+    using Pkg
+    Pkg.add("AMDGPU")
+end
+if parse(Bool, get(ENV, "CI_USE_METAL", "false"))
+    using Pkg
+    Pkg.add("Metal")
+end
+
+addprocs(2, exeflags="--project=$(Base.active_project())")
 
 @everywhere begin
-    try using CUDA
-    catch end
+    if !parse(Bool, get(ENV, "CI", "false")) || parse(Bool, get(ENV, "CI_USE_CUDA", "false"))
+        try using CUDA
+        catch end
+    end
 
-    try using AMDGPU
-    catch end
+    if !parse(Bool, get(ENV, "CI", "false")) || parse(Bool, get(ENV, "CI_USE_ROCM", "false"))
+        try using AMDGPU
+        catch end
+    end
 
-    try using Metal
-    catch end
+    if !parse(Bool, get(ENV, "CI", "false")) || parse(Bool, get(ENV, "CI_USE_METAL", "false"))
+        try using Metal
+        catch end
+    end
 
     using Distributed, Dagger, DaggerGPU
     import DaggerGPU: Kernel
