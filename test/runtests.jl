@@ -11,6 +11,10 @@ if parse(Bool, get(ENV, "CI_USE_ROCM", "false"))
     using Pkg
     Pkg.add("AMDGPU")
 end
+if parse(Bool, get(ENV, "CI_USE_ONEAPI", "false"))
+    using Pkg
+    Pkg.add("oneAPI")
+end
 if parse(Bool, get(ENV, "CI_USE_METAL", "false"))
     using Pkg
     Pkg.add("Metal")
@@ -26,6 +30,11 @@ addprocs(2, exeflags="--project=$(Base.active_project())")
 
     if !parse(Bool, get(ENV, "CI", "false")) || parse(Bool, get(ENV, "CI_USE_ROCM", "false"))
         try using AMDGPU
+        catch end
+    end
+
+    if !parse(Bool, get(ENV, "CI", "false")) || parse(Bool, get(ENV, "CI_USE_ONEAPI", "false"))
+        try using oneAPI
         catch end
     end
 
@@ -73,6 +82,7 @@ end
 
 @test DaggerGPU.cancompute(:CUDA) ||
       DaggerGPU.cancompute(:ROC)  ||
+      DaggerGPU.cancompute(:oneAPI)  ||
       DaggerGPU.cancompute(:Metal)
 
 @testset "CPU" begin
@@ -322,6 +332,127 @@ end
                 @test collect(cholesky(DA).U) ≈ cholesky(collect(DA)).U
             end
         end
+    end
+end
+
+@testset "oneAPI" begin
+    if !DaggerGPU.cancompute(:oneAPI)
+        @warn "No oneAPI devices available, skipping tests"
+    else
+        oneproc = if isdefined(Base, :get_extension)
+            Base.get_extension(DaggerGPU, :IntelExt).oneArrayDeviceProc
+        else
+            oneArrayDeviceProc
+        end
+        @test DaggerGPU.processor(:oneAPI) === oneproc
+        ndevices = length(oneAPI.devices())
+        gpu_configs = Any[1]
+        if ndevices > 1
+            push!(gpu_configs, 2)
+        end
+        single_gpu_configs = copy(gpu_configs)
+        push!(gpu_configs, :all)
+
+        @testset "Arrays (GPU $gpu)" for gpu in gpu_configs
+            scope = Dagger.scope(intel_gpus=(gpu == :all ? Colon() : [gpu]))
+
+            b = generate_thunks()
+            c = Dagger.with_options(;scope) do
+                @test fetch(Dagger.@spawn isongpu(b))
+                Dagger.@spawn sum(b)
+            end
+            @test !fetch(Dagger.@spawn isongpu(b))
+            @test fetch(Dagger.@spawn identity(c)) == 20
+        end
+
+        @testset "KernelAbstractions (GPU $gpu)" for gpu in gpu_configs
+            scope = Dagger.scope(intel_gpus=(gpu == :all ? Colon() : [gpu]))
+            local_scope = Dagger.scope(worker=1, intel_gpus=(gpu == :all ? Colon() : [gpu]))
+
+            A = rand(Float32, 8)
+            DA, T = Dagger.with_options(;scope) do
+                fetch(Dagger.@spawn fill_thunk(A, 2.3f0))
+            end
+            @test all(DA .== 2.3f0)
+            @test T <: oneArray
+
+            if gpu != :all
+                local A, B
+                old_dev = oneAPI.device()
+                oneAPI.device!(oneAPI.devices()[gpu])
+                A = oneAPI.rand(Float32, 128)
+                B = oneAPI.zeros(Float32, 128)
+                oneAPI.device!(old_dev)
+                Dagger.with_options(;scope=local_scope) do
+                    fetch(Dagger.@spawn Kernel(copy_kernel)(B, A; ndrange=length(A)))
+                end
+                old_dev = oneAPI.device()
+                oneAPI.device!(oneAPI.devices()[gpu])
+                @test all(B .== A)
+                oneAPI.device!(old_dev)
+            end
+        end
+
+        @testset "DArray Allocation (GPU $gpu)" for gpu in single_gpu_configs
+            scope = Dagger.scope(intel_gpu=gpu)
+
+            DA_cpu = rand(Blocks(4, 4), Float32, 8, 8)
+            Dagger.with_options(;scope) do
+                DA_gpu = similar(DA_cpu)
+                for chunk in DA_gpu.chunks
+                    chunk = fetch(chunk; raw=true)
+                    @test chunk isa Dagger.Chunk{<:oneArray}
+                    @test remotecall_fetch(chunk.handle.owner, chunk) do chunk
+                        devs = collect(oneAPI.devices())
+                        arr = Dagger.MemPool.poolget(chunk.handle)
+                        return oneAPI.device(arr) == devs[gpu]
+                    end
+                end
+
+                for fn in (rand, randn, ones, zeros)
+                    DA = rand(Blocks(4, 4), Float32, 8, 8)
+                    for chunk in DA.chunks
+                        chunk = fetch(chunk; raw=true)
+                        @test chunk isa Dagger.Chunk{<:oneArray}
+                        @test remotecall_fetch(chunk.handle.owner, chunk) do chunk
+                            devs = collect(oneAPI.devices())
+                            arr = Dagger.MemPool.poolget(chunk.handle)
+                            return oneAPI.device(arr) == devs[gpu]
+                        end
+                    end
+                end
+            end
+        end
+
+        #= FIXME: Requires more generic matmul, missing Cholesky methods
+        @testset "Datadeps (GPU $gpu)" for gpu in gpu_configs
+            local_scope = Dagger.scope(worker=1, intel_gpus=(gpu == :all ? Colon() : [gpu]))
+
+            DA = rand(Blocks(4, 4), Float32, 8, 8)
+            DB = rand(Blocks(4, 4), Float32, 8, 8)
+
+            # In-place Matmul
+            DC = zeros(Blocks(4, 4), Float32, 8, 8)
+            Dagger.with_options(;scope=local_scope) do
+                mul!(DC, DA, DB)
+            end
+            @test collect(DC) ≈ collect(DA) * collect(DB)
+
+            # Out-of-place Matmul
+            Dagger.with_options(;scope=local_scope) do
+                @test collect(DA * DB) ≈ collect(DA) * collect(DB)
+            end
+
+            # Out-of-place Cholesky
+            A = rand(Float32, 8, 8)
+            A = A * A'
+            A[diagind(A)] .+= size(A, 1)
+            DA = DArray(A, Blocks(4, 4))
+            Dagger.with_options(;scope=local_scope) do
+                @test collect(cholesky(DA).U) ≈ cholesky(collect(DA)).U
+            end
+        end
+        =#
     end
 end
 

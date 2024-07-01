@@ -29,6 +29,21 @@ steps:
     env:
       CI_USE_ROCM: "1"
 
+  - label: "[oneAPI] Julia v1.10"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "1.10"
+      - JuliaCI/julia-test#v1: ~
+      - JuliaCI/julia-coverage#v1:
+          codecov: false # TODO
+    agents:
+      queue: "juliagpu"
+      intel: "*"
+    if: build.message !~ /\[skip tests\]/
+    timeout_in_minutes: 20
+    env:
+      CI_USE_ONEAPI: "1"
+
   - label: "[Metal] Julia v1.10"
     plugins:
       - JuliaCI/julia#v1:
