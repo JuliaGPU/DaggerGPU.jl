@@ -43,6 +43,8 @@ Dagger.memory_space(x::ROCArray) =
 Dagger.memory_spaces(proc::ROCArrayDeviceProc) = Set([ROCVRAMMemorySpace(proc.owner, proc.device_id)])
 Dagger.processors(space::ROCVRAMMemorySpace) = Set([ROCArrayDeviceProc(space.owner, space.device_id)])
 
+Dagger.unsafe_free!(x::ROCArray) = AMDGPU.unsafe_free!(x)
+
 function to_device(proc::ROCArrayDeviceProc)
     @assert Dagger.root_worker_id(proc) == myid()
     return DEVICES[proc.device_id]

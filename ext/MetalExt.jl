@@ -47,6 +47,8 @@ _device_id(dev::MtlDevice) = findfirst(other_dev->other_dev === dev, Metal.devic
 Dagger.memory_spaces(proc::MtlArrayDeviceProc) = Set([MetalVRAMMemorySpace(proc.owner, proc.device_id)])
 Dagger.processors(space::MetalVRAMMemorySpace) = Set([MtlArrayDeviceProc(space.owner, space.device_id)])
 
+Dagger.unsafe_free!(x::MtlArray) = Metal.unsafe_free!(x)
+
 function to_device(proc::MtlArrayDeviceProc)
     @assert Dagger.root_worker_id(proc) == myid()
     return DEVICES[proc.device_id]

@@ -50,6 +50,8 @@ _device_id(dev::ZeDevice) = findfirst(other_dev->other_dev === dev, collect(oneA
 Dagger.memory_spaces(proc::oneArrayDeviceProc) = Set([IntelVRAMMemorySpace(proc.owner, proc.device_id)])
 Dagger.processors(space::IntelVRAMMemorySpace) = Set([oneArrayDeviceProc(space.owner, space.device_id)])
 
+Dagger.unsafe_free!(x::oneArray) = oneAPI.unsafe_free!(x)
+
 function to_device(proc::oneArrayDeviceProc)
     @assert Dagger.root_worker_id(proc) == myid()
     return DEVICES[proc.device_id]
