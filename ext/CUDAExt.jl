@@ -16,7 +16,7 @@ if isdefined(Base, :get_extension)
 else
     import ..CUDA
 end
-import CUDA: CuDevice, CuContext, CuStream, CuArray, CUDABackend
+import CUDA: CuDevice, CuContext, CuStream, CuEvent, CuArray, CUDABackend
 import CUDA: devices, attribute, context, context!, stream, stream!
 import CUDA: CUBLAS, CUSOLVER
 
@@ -99,6 +99,18 @@ function sync_with_context(x::Union{Dagger.Processor,Dagger.MemorySpace})
     end
 end
 
+function sync_across!(from_space::CUDAVRAMMemorySpace, to_space::CUDAVRAMMemorySpace)
+    if Dagger.root_worker_id(from_space) == Dagger.root_worker_id(to_space)
+        @assert from_space.device != to_space.device
+        @assert Dagger.root_worker_id(from_space) == myid()
+        event = CuEvent()
+        CUDA.record(event, STREAMS[from_space.device])
+        CUDA.wait(event, STREAMS[to_space.device])
+    else
+        sync_with_context(from_space)
+    end
+end
+
 # Allocations
 Dagger.allocate_array_func(::CuArrayDeviceProc, ::typeof(rand)) = CUDA.rand
 Dagger.allocate_array_func(::CuArrayDeviceProc, ::typeof(randn)) = CUDA.randn
@@ -126,7 +138,7 @@ function Dagger.move!(to_space::CUDAVRAMMemorySpace, from_space::Dagger.CPURAMMe
     return
 end
 function Dagger.move!(to_space::CUDAVRAMMemorySpace, from_space::CUDAVRAMMemorySpace, to::AbstractArray{T,N}, from::AbstractArray{T,N}) where {T,N}
-    sync_with_context(from_space)
+    sync_across!(from_space, to_space)
     with_context!(to_space)
     copyto!(to, from)
     return
