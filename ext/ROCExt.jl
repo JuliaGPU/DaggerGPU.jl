@@ -264,8 +264,14 @@ DaggerGPU.kernel_backend(proc::ROCArrayDeviceProc) = ROCBackend()
 DaggerGPU.with_device(f, proc::ROCArrayDeviceProc) =
     AMDGPU.device!(f, AMDGPU.devices()[proc.device_id])
 
-Dagger.to_scope(::Val{:rocm_gpu}, sc::NamedTuple) =
-    Dagger.to_scope(Val{:rocm_gpus}(), merge(sc, (;rocm_gpus=[sc.rocm_gpu])))
+function Dagger.to_scope(::Val{:rocm_gpu}, sc::NamedTuple)
+    if sc.rocm_gpu == Colon()
+        return Dagger.to_scope(Val{:rocm_gpus}(), merge(sc, (;rocm_gpus=Colon())))
+    else
+        @assert sc.rocm_gpu isa Integer "Expected a single GPU device ID for :rocm_gpu, got $(sc.rocm_gpu)\nConsider using :rocm_gpus instead."
+        return Dagger.to_scope(Val{:rocm_gpus}(), merge(sc, (;rocm_gpus=[sc.rocm_gpu])))
+    end
+end
 function Dagger.to_scope(::Val{:rocm_gpus}, sc::NamedTuple)
     if haskey(sc, :worker)
         workers = Int[sc.worker]

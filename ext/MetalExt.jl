@@ -281,8 +281,14 @@ DaggerGPU.kernel_backend(proc::MtlArrayDeviceProc) = MetalBackend()
 # TODO: Switch devices
 DaggerGPU.with_device(f, proc::MtlArrayDeviceProc) = f()
 
-Dagger.to_scope(::Val{:metal_gpu}, sc::NamedTuple) =
-    Dagger.to_scope(Val{:metal_gpus}(), merge(sc, (;metal_gpus=[sc.metal_gpu])))
+function Dagger.to_scope(::Val{:metal_gpu}, sc::NamedTuple)
+    if sc.metal_gpu == Colon()
+        return Dagger.to_scope(Val{:metal_gpus}(), merge(sc, (;metal_gpus=Colon())))
+    else
+        @assert sc.metal_gpu isa Integer "Expected a single GPU device ID for :metal_gpu, got $(sc.metal_gpu)\nConsider using :metal_gpus instead."
+        return Dagger.to_scope(Val{:metal_gpus}(), merge(sc, (;metal_gpus=[sc.metal_gpu])))
+    end
+end
 Dagger.scope_key_precedence(::Val{:metal_gpu}) = 1
 function Dagger.to_scope(::Val{:metal_gpus}, sc::NamedTuple)
     if haskey(sc, :worker)

@@ -294,8 +294,14 @@ DaggerGPU.kernel_backend(::CuArrayDeviceProc) = CUDABackend()
 DaggerGPU.with_device(f, proc::CuArrayDeviceProc) =
     CUDA.device!(f, proc.device)
 
-Dagger.to_scope(::Val{:cuda_gpu}, sc::NamedTuple) =
-    Dagger.to_scope(Val{:cuda_gpus}(), merge(sc, (;cuda_gpus=[sc.cuda_gpu])))
+function Dagger.to_scope(::Val{:cuda_gpu}, sc::NamedTuple)
+    if sc.cuda_gpu == Colon()
+        return Dagger.to_scope(Val{:cuda_gpus}(), merge(sc, (;cuda_gpus=Colon())))
+    else
+        @assert sc.cuda_gpu isa Integer "Expected a single GPU device ID for :cuda_gpu, got $(sc.cuda_gpu)\nConsider using :cuda_gpus instead."
+        return Dagger.to_scope(Val{:cuda_gpus}(), merge(sc, (;cuda_gpus=[sc.cuda_gpu])))
+    end
+end
 Dagger.scope_key_precedence(::Val{:cuda_gpu}) = 1
 function Dagger.to_scope(::Val{:cuda_gpus}, sc::NamedTuple)
     if haskey(sc, :worker)

@@ -262,8 +262,14 @@ DaggerGPU.kernel_backend(::oneArrayDeviceProc) = oneAPIBackend()
 DaggerGPU.with_device(f, proc::oneArrayDeviceProc) =
     device!(f, proc.device_id)
 
-Dagger.to_scope(::Val{:intel_gpu}, sc::NamedTuple) =
-    Dagger.to_scope(Val{:intel_gpus}(), merge(sc, (;intel_gpus=[sc.intel_gpu])))
+function Dagger.to_scope(::Val{:intel_gpu}, sc::NamedTuple)
+    if sc.intel_gpu == Colon()
+        return Dagger.to_scope(Val{:intel_gpus}(), merge(sc, (;intel_gpus=Colon())))
+    else
+        @assert sc.intel_gpu isa Integer "Expected a single GPU device ID for :intel_gpu, got $(sc.intel_gpu)\nConsider using :intel_gpus instead."
+        return Dagger.to_scope(Val{:intel_gpus}(), merge(sc, (;intel_gpus=[sc.intel_gpu])))
+    end
+end
 Dagger.scope_key_precedence(::Val{:intel_gpu}) = 1
 function Dagger.to_scope(::Val{:intel_gpus}, sc::NamedTuple)
     if haskey(sc, :worker)
