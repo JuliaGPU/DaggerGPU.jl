@@ -138,7 +138,8 @@ function Dagger.move!(to_space::CUDAVRAMMemorySpace, from_space::Dagger.CPURAMMe
     return
 end
 function Dagger.move!(to_space::CUDAVRAMMemorySpace, from_space::CUDAVRAMMemorySpace, to::AbstractArray{T,N}, from::AbstractArray{T,N}) where {T,N}
-    sync_across!(from_space, to_space)
+    # TODO: sync_across!(from_space, to_space)
+    sync_with_context(from_space)
     with_context!(to_space)
     copyto!(to, from)
     return
