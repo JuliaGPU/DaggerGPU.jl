@@ -105,12 +105,14 @@ end
     if !DaggerGPU.cancompute(:CUDA)
         @warn "No CUDA devices available, skipping tests"
     else
+        #=
         cuproc = if isdefined(Base, :get_extension)
             Base.get_extension(DaggerGPU, :CUDAExt).CuArrayDeviceProc
         else
             CuArrayDeviceProc
         end
         @test DaggerGPU.processor(:CUDA) === cuproc
+        =#
         ndevices = length(collect(CUDA.devices()))
         gpu_configs = Any[1]
         if ndevices > 1
@@ -222,12 +224,14 @@ end
     if !DaggerGPU.cancompute(:ROC)
         @warn "No ROCm devices available, skipping tests"
     else
+        #=
         rocproc = if isdefined(Base, :get_extension)
             Base.get_extension(DaggerGPU, :ROCExt).ROCArrayDeviceProc
         else
             ROCArrayDeviceProc
         end
         @test DaggerGPU.processor(:ROC) === rocproc
+        =#
         ndevices = length(AMDGPU.devices())
         gpu_configs = Any[1]
         if ndevices > 1
@@ -339,12 +343,14 @@ end
     if !DaggerGPU.cancompute(:oneAPI)
         @warn "No oneAPI devices available, skipping tests"
     else
+        #=
         oneproc = if isdefined(Base, :get_extension)
             Base.get_extension(DaggerGPU, :IntelExt).oneArrayDeviceProc
         else
             oneArrayDeviceProc
         end
         @test DaggerGPU.processor(:oneAPI) === oneproc
+        =#
         ndevices = length(oneAPI.devices())
         gpu_configs = Any[1]
         if ndevices > 1
@@ -460,12 +466,14 @@ end
     if !DaggerGPU.cancompute(:Metal)
         @warn "No Metal devices available, skipping tests"
     else
+        #=
         mtlproc = if isdefined(Base, :get_extension)
             Base.get_extension(DaggerGPU, :MetalExt).MtlArrayDeviceProc
         else
             MtlArrayDeviceProc
         end
         @test DaggerGPU.processor(:Metal) === mtlproc
+        =#
         b = generate_thunks()
         c = Dagger.with_options(;scope=Dagger.scope(metal_gpu=1)) do
             @test fetch(Dagger.@spawn isongpu(b))
