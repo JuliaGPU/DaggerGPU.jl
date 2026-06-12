@@ -7,8 +7,7 @@ steps:
       - JuliaCI/julia-coverage#v1:
           codecov: false # TODO
     agents:
-      queue: "juliagpu"
-      cuda: "*"
+      queue: "cuda"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 20
     env:
@@ -22,8 +21,7 @@ steps:
       - JuliaCI/julia-coverage#v1:
           codecov: false # TODO
     agents:
-      queue: "juliagpu"
-      rocm: "*"
+      queue: "rocm"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 20
     env:
@@ -37,8 +35,7 @@ steps:
       - JuliaCI/julia-coverage#v1:
           codecov: false # TODO
     agents:
-      queue: "juliagpu"
-      intel: "*"
+      queue: "oneapi"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 20
     env:
@@ -52,9 +49,7 @@ steps:
       - JuliaCI/julia-coverage#v1:
           codecov: false # TODO
     agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
+      queue: "metal"
     if: build.message !~ /\[skip tests\]/
     timeout_in_minutes: 20
     env:
